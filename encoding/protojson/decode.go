@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/internal/pragma"
 	"google.golang.org/protobuf/internal/set"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	pref "google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
@@ -92,12 +93,14 @@ func (d decoder) newError(pos int, f string, x ...interface{}) error {
 
 // unexpectedTokenError returns a syntax error for the given unexpected token.
 func (d decoder) unexpectedTokenError(tok json.Token) error {
+	// panic("")
 	return d.syntaxError(tok.Pos(), "unexpected token %s", tok.RawString())
 }
 
 // syntaxError returns a syntax error for given position.
 func (d decoder) syntaxError(pos int, f string, x ...interface{}) error {
 	line, column := d.Position(pos)
+	// panic("")
 	head := fmt.Sprintf("syntax error (line %d:%d): ", line, column)
 	return errors.New(head+f, x...)
 }
@@ -111,6 +114,37 @@ func (d decoder) unmarshalMessage(m pref.Message, skipTypeURL bool) error {
 	tok, err := d.Read()
 	if err != nil {
 		return err
+	}
+	// TODO unmarshall "Y" if message is `message X { oneof kind { Empty Y } }`
+	if tok.Kind() == json.String {
+		if m.Descriptor().Oneofs().Len() == 1 {
+			var fd protoreflect.FieldDescriptor
+			fields := m.Descriptor().Fields()
+			isUnion := true
+			for i := 0; i < fields.Len(); i++ {
+				f := fields.Get(i)
+				if f.ContainingOneof() == nil {
+					isUnion = false
+					break
+				}
+				str := tok.RawString()
+				str = str[1 : len(str)-1]
+				if string(f.Name()) == str || (f.HasJSONName() && string(f.JSONName()) == str) {
+					fd = f
+				}
+			}
+			if !isUnion {
+				return d.syntaxError(tok.Pos(), "token looks like a 'union' but proto structure doesn't. token '%s'", tok.RawString())
+			}
+			if fd == nil {
+				return d.syntaxError(tok.Pos(), "token looks like a 'union' but no matching field. token '%s'", tok.RawString())
+			}
+			// Required or optional fields.
+			if err := d.unmarshalSingular(m, fd); err != nil {
+				return err
+			}
+			return nil
+		}
 	}
 	if tok.Kind() != json.ObjectOpen {
 		return d.unexpectedTokenError(tok)
@@ -146,6 +180,8 @@ func (d decoder) unmarshalFields(m pref.Message, skipTypeURL bool) error {
 			return nil
 		case json.Name:
 			// Continue below.
+		case json.Void:
+
 		}
 
 		name := tok.Name()

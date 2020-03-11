@@ -25,6 +25,7 @@ const (
 	ObjectClose
 	ArrayOpen
 	ArrayClose
+	Void
 
 	// comma is only for parsing in between tokens and
 	// does not need to be exported.
@@ -96,7 +97,7 @@ func (t Token) Pos() int {
 
 // Name returns the object name if token is Name, else it will return an error.
 func (t Token) Name() string {
-	if t.kind == Name {
+	if t.kind == Name || t.kind == Void {
 		return t.str
 	}
 	panic(fmt.Sprintf("Token is not a Name: %v", t.RawString()))

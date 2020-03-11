@@ -107,12 +107,15 @@ func (d *Decoder) Read() (Token, error) {
 		if len(d.in) == 0 {
 			return Token{}, ErrUnexpectedEOF
 		}
-		if c := d.in[0]; c != ':' {
+		c := d.in[0]
+		if c == '}' || c == ',' {
+			tok.kind = Void
+		} else if c != ':' {
 			return Token{}, d.newSyntaxError(d.currPos(), `unexpected character %s, missing ":" after field name`, string(c))
+		} else {
+			tok.kind = Name
+			d.consume(1)
 		}
-		tok.kind = Name
-		d.consume(1)
-
 	case ObjectOpen, ArrayOpen:
 		if !d.isValueNext() {
 			return Token{}, d.newSyntaxError(tok.pos, unexpectedFmt, tok.RawString())
@@ -217,6 +220,7 @@ func (d *Decoder) parseNext() (Token, error) {
 func (d *Decoder) newSyntaxError(pos int, f string, x ...interface{}) error {
 	e := errors.New(f, x...)
 	line, column := d.Position(pos)
+	// panic("")
 	return errors.New("syntax error (line %d:%d): %v", line, column, e)
 }
 

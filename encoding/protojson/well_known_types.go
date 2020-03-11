@@ -469,6 +469,18 @@ func (e encoder) marshalEmpty(pref.Message) error {
 }
 
 func (d decoder) unmarshalEmpty(pref.Message) error {
+	{
+		tok, err := d.Peek()
+		if err != nil {
+			return err
+		}
+		if tok.Kind() == json.ObjectClose {
+			return nil
+		}
+		if tok.Kind() == json.EOF {
+			return nil
+		}
+	}
 	tok, err := d.Read()
 	if err != nil {
 		return err

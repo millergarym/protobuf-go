@@ -89,6 +89,7 @@ func (d decoder) unexpectedTokenError(tok text.Token) error {
 // syntaxError returns a syntax error for given position.
 func (d decoder) syntaxError(pos int, f string, x ...interface{}) error {
 	line, column := d.Position(pos)
+	panic("")
 	head := fmt.Sprintf("syntax error (line %d:%d): ", line, column)
 	return errors.New(head+f, x...)
 }
