@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/internal/flags"
 	"google.golang.org/protobuf/internal/pragma"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	pref "google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
@@ -79,6 +80,12 @@ type MarshalOptions struct {
 	//  ╚═══════╧════════════════════════════╝
 	EmitUnpopulated bool
 
+	// UseRawNumeric { "x" : 1 } instead of { "x" : "1" }
+	UseRawNumeric bool
+
+	// UseSpecialEmpty "Z" instead of { "Z" : {} }
+	UseSpecialEmpty bool
+
 	// Resolver is used for looking up types when expanding google.protobuf.Any
 	// messages. If nil, this defaults to using protoregistry.GlobalTypes.
 	Resolver interface {
@@ -133,6 +140,42 @@ type encoder struct {
 
 // marshalMessage marshals the given protoreflect.Message.
 func (e encoder) marshalMessage(m pref.Message) error {
+	if e.opts.UseSpecialEmpty {
+		fieldDescs := m.Descriptor().Fields()
+		var fdf protoreflect.FieldDescriptor
+		i := 0
+		fdlen := fieldDescs.Len()
+		oneoneof := false
+
+		for i < fdlen {
+			fd := fieldDescs.Get(i)
+			oneofName := ""
+			if od := fd.ContainingOneof(); od != nil {
+				oneoneof = true
+				if oneofName == "" {
+					oneofName = string(od.Name())
+				} else if oneofName != string(od.Name()) {
+					oneoneof = false
+					break
+				}
+				fd = m.WhichOneof(od)
+				i += od.Fields().Len()
+				if fd == nil {
+					continue
+				}
+				fdf = fd
+			}
+		}
+		if oneoneof && fdlen == i && fdf.Message().FullName() == "google.protobuf.Empty" {
+			name := fdf.JSONName()
+			if e.opts.UseProtoNames {
+				name = string(fdf.Name())
+			}
+			e.WriteString(name)
+			return nil
+		}
+	}
+
 	if isCustomType(m.Descriptor().FullName()) {
 		return e.marshalCustomType(m)
 	}
@@ -240,9 +283,12 @@ func (e encoder) marshalSingular(val pref.Value, fd pref.FieldDescriptor) error 
 
 	case pref.Int64Kind, pref.Sint64Kind, pref.Uint64Kind,
 		pref.Sfixed64Kind, pref.Fixed64Kind:
-		// 64-bit integers are written out as JSON string.
-		e.WriteString(val.String())
-
+		if e.opts.UseRawNumeric {
+			e.WriteInt(val.Int())
+		} else {
+			// 64-bit integers are written out as JSON string.
+			e.WriteString(val.String())
+		}
 	case pref.FloatKind:
 		// Encoder.WriteFloat handles the special numbers NaN and infinites.
 		e.WriteFloat(val.Float(), 32)
