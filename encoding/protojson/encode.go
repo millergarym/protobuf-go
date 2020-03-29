@@ -166,7 +166,7 @@ func (e encoder) marshalMessage(m pref.Message) error {
 				fdf = fd
 			}
 		}
-		if oneoneof && fdlen == i && fdf.Message().FullName() == "google.protobuf.Empty" {
+		if oneoneof && fdlen == i && fdf.Message() != nil && fdf.Message().FullName() == "google.protobuf.Empty" {
 			name := fdf.JSONName()
 			if e.opts.UseProtoNames {
 				name = string(fdf.Name())
