@@ -164,6 +164,8 @@ func (e encoder) marshalMessage(m pref.Message) error {
 					continue
 				}
 				fdf = fd
+			} else {
+				break
 			}
 		}
 		if oneoneof && fdlen == i && fdf.Message() != nil && fdf.Message().FullName() == "google.protobuf.Empty" {
